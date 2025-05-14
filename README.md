@@ -6,6 +6,7 @@ For my senior project as a Business Analytics major at Drexel University, I stre
 As the main data analyst for the project, I successfully led the data rebalancing effort and model optimization. This project significantly enhanced my ability to **manage large datasets, preprocess complex data,** and **implement machine learning techniques** to address real-world challenges.
 
 **Stakeholders:** Data & Analytics, Risk & Fraud Management
+
 **Skills:** R, Data Preprocessing, Predictive Modeling (Decision Trees, Logistic Regressions, Random Forests)
 
 
