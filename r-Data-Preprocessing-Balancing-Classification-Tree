@@ -1,0 +1,441 @@
+#data preparation: reassign correct data category 
+clients[sapply(clients, is.character)]=lapply(clients[sapply(clients, is.character)],as.factor)
+clients$month=as.factor(clients$month)
+clients$having_children_flg=as.integer((clients$having_children_flg))
+clients$is_client=as.factor(clients$is_client)
+clients$bad_client_target=as.factor(clients$bad_client_target)
+clients$region=as.factor(clients$region)
+
+#remove product category
+clients =clients[,-7]
+summary(clients)
+
+### Data cleaning
+##install packages
+install.packages("dplyr")
+install.packages("psych")
+install.packages("DescTools")
+
+##load packages
+library("dplyr")
+library("psych")
+library("DescTools")
+
+#Converting each column into its respective data type
+clients[sapply(clients, is.character)]=lapply(clients[sapply(clients, is.character)],as.factor)
+clients$month=as.factor(clients$month)
+clients$having_children_flg=as.integer((clients$having_children_flg))
+clients$is_client=as.factor(clients$is_client)
+clients$bad_client_target=as.factor(clients$bad_client_target)
+clients$region=as.factor(clients$region)
+
+#Removing 'Product Category' column (irrelevant)
+clients = clients[,-7]
+summary(clients)
+
+#MISSING VALUES
+#identify missing values
+is.na(clients)
+missing_values <- is.na(clients)
+print(missing_values)
+
+#count of how many missing values are in each column
+col.ms <- colSums(missing_values) 
+print(col.ms)
+
+#Duplicate
+##Identifying rows with duplicate data
+duplicated(clients)
+##Total number of duplicate data in dataset
+sum(duplicated(clients))
+
+#packages
+install.packages("rpart")
+install.packages("rpart.plot")
+
+library(rpart)
+library(rpart.plot)
+
+#####Splitting training and test set######
+set.seed(12345)
+sample <- sample(c(TRUE, FALSE), nrow(clients), replace = TRUE, prob = c(0.75, 0.25))
+clients_train <- clients[sample, ]
+clients_test <- clients[!sample, ]
+
+#validate the training and test sets
+summary(clients)
+#numerical variables
+t.test(clients_train$credit_amount,clients_test$credit_amount,var.equal=TRUE)
+t.test(clients_train$credit_term,clients_test$credit_term,var.equal=TRUE)
+t.test(clients_train$age,clients_test$age,var.equal=TRUE)
+t.test(clients_train$having_children_flg,clients_test$having_children_flg,var.equal=TRUE)
+t.test(clients_train$income,clients_test$income,var.equal=TRUE)
+t.test(clients_train$phone_operator,clients_test$phone_operator,var.equal=TRUE) ## is a numerical variable for preliminary 
+
+#categorical variables
+table1=table(clients_train$month)
+table2=table(clients_test$month)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+table1=table(clients_train$sex)
+table2=table(clients_test$sex)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+table1=table(clients_train$education)
+table2=table(clients_test$education)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+table1=table(clients_train$region)
+table2=table(clients_test$region)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+table1=table(clients_train$family_status)
+table2=table(clients_test$family_status)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+table1=table(clients_train$is_client)
+table2=table(clients_test$is_client)
+table3=rbind(table1,table2)
+chisq.test(table3)
+
+### training and testing dataset are independent 
+
+#### RUN ON ORIGINAL DATASET: MODEL I
+#build C4.5 tree 
+c45_tree_raw=rpart(bad_client_target~.,data=clients,parms=list(split="information"))
+c45_tree_raw
+rpart.plot(c45_tree_raw)
+
+# Buid CART tree
+cart_tree_raw=rpart(bad_client_target~., data=clients)
+cart_tree_raw
+rpart.plot(cart_tree_raw)
+
+#is our training set imbalanced?
+table3=table(clients_train$bad_client_target)
+table3[2]/nrow(clients_train)
+#imbalanced: 11.269%
+
+#### RUN on imbalanced dataset: MODEL II
+# Buid CART tree
+cart_tree_imbalanced=rpart(bad_client_target~., data=clients_train)
+cart_tree_imbalanced
+rpart.plot(cart_tree_imbalanced)
+
+#Evaluate CART tree
+#check accuracy with training set
+clients_train$pred=predict(cart_tree_imbalanced,newdata=clients_train,type="class")
+train_table2=table(clients_train$bad_client_target,clients_train$pred)
+train_table2
+(train_table2[1,1]+train_table2[2,2])/nrow(clients_train)
+
+#check accuracy with test set
+clients_test$pred=predict(cart_tree_imbalanced,newdata=clients_test,type="class")
+test_table2=table(clients_test$bad_client_target,clients_test$pred)
+test_table2
+(test_table2[1,1]+test_table2[2,2])/nrow(clients_test)
+
+clients_train =clients_train[,-14]
+clients_test =clients_test[,-14]
+
+#build C4.5 tree 
+c45_tree_imbalanced=rpart(bad_client_target~.,data=clients_train,parms=list(split="information"))
+c45_tree_imbalanced
+rpart.plot(c45_tree_imbalanced)
+
+#Evaluate C45 tree (imbalanced)
+#check accuracy with training set
+clients_train$pred=predict(c45_tree_imbalanced,newdata=clients_train,type="class")
+train_table=table(clients_train$bad_client_target,clients_train$pred)
+train_table
+(train_table[1,1]+train_table[2,2])/nrow(clients_train)
+
+#check accuracy with test set
+clients_test$pred=predict(c45_tree_imbalanced,newdata=clients_test,type="class")
+test_table=table(clients_test$bad_client_target,clients_test$pred)
+test_table
+(test_table[1,1]+test_table[2,2])/nrow(clients_test)
+
+### BALANCING DATA: Down-sample the majority class - Model III
+clients_train_balanced =clients_train_balanced[,-14]
+clients_test =clients_test[,-14]
+
+#is our training set imbalanced?
+table3=table(clients_train$bad_client_target)
+table3[2]/nrow(clients_train)
+table3
+
+#balance training set to have 15% yes in it
+table3[2]/0.15
+table3
+
+#we have to brng training set down to 947 observations so bad client target 1 can be 15%
+nrow(clients_train)
+#how many do I need to remove to bring 0 down to 947 
+nrow(clients_train)-table3[2]/0.15
+
+#what proportion is of No being removed is that? 28%
+(nrow(clients_train)-table3[2]/0.15)/table3[1]
+
+#create training subset with only no 
+clients_train_0=subset(clients_train,clients_train$bad_client_target=='0')
+
+#randomly select observations to remove-> remove 28%
+removal=sample(c(TRUE,FALSE),nrow(clients_train_0),replace=TRUE,prob=c(0.2802624,(1-0.2802624)))
+clients_train_balanced=clients_train_0[!removal,]
+clients_train_balanced=rbind(clients_train_balanced,subset(clients_train,clients_train$bad_client_target==1))
+
+table4=table(clients_train_balanced$bad_client_target)
+table4
+table4[2]/nrow(clients_train_balanced)
+#balanced
+
+#Buid CART tree
+cart_tree_balanced=rpart(bad_client_target~., data=clients_train_balanced)
+cart_tree_balanced
+rpart.plot(cart_tree_balanced)
+
+carttree <- rpart(
+  bad_client_target~.,
+  data=clients_train_balanced,
+  method = "class",
+  minsplit = 2,
+  minbucket = 2
+)
+carttree
+rpart.plot(carttree)
+
+
+#Evaluate CART tree
+#check accuracy with training set
+clients_train_balanced$pred=predict(cart_tree_balanced,newdata=clients_train_balanced,type="class")
+train_table3=table(clients_train_balanced$bad_client_target,clients_train_balanced$pred)
+train_table3
+(train_table3[1,1]+train_table3[2,2])/nrow(clients_train_balanced)
+
+#check accuracy with test set
+clients_test$pred=predict(cart_tree_balanced,newdata=clients_test,type="class")
+test_table3=table(clients_test$bad_client_target,clients_test$pred)
+test_table3
+(test_table3[1,1]+test_table3[2,2])/nrow(clients_test)
+
+clients_train =clients_train[,-14]
+
+#build C4.5 tree 
+c45_tree_balanced=rpart(bad_client_target~.,data=clients_train_balanced,parms=list(split="information"))
+c45_tree_balanced
+rpart.plot(c45_tree_balanced)
+
+#Evaluate C45 tree (imbalanced)
+#check accuracy with training set
+clients_train_balanced$pred=predict(c45_tree_balanced,newdata=clients_train_balanced,type="class")
+train_table=table(clients_train_balanced$bad_client_target,clients_train_balanced$pred)
+train_table
+(train_table[1,1]+train_table[2,2])/nrow(clients_train_balanced)
+
+#check accuracy with test set
+clients_test$pred=predict(c45_tree_balanced,newdata=clients_test,type="class")
+test_table=table(clients_test$bad_client_target,clients_test$pred)
+test_table
+(test_table[1,1]+test_table[2,2])/nrow(clients_test)
+
+### BALANCING DATA: Up-sample the minority class - MODEL IV
+
+#balance training set to have 15% yes in it
+table3=table(clients_train$bad_client_target)
+table3[2]/nrow(clients_train)
+table3
+
+#how many more bad_client_target_1 do we need to oversample so it's 15% of the dataset
+table3[1]/0.85-nrow(clients_train)
+##sample 57 more variables -> 199 bad_client_target_1
+142+57
+table3[1]/0.85
+(142+57)/1315
+
+#Random oversample in R using Excel 
+#clean the new dataset again
+#Converting each column into its respective data type
+clients_train_random_oversampling[sapply(clients_train_random_oversampling, is.character)]=lapply(clients_train_random_oversampling[sapply(clients_train_random_oversampling, is.character)],as.factor)
+summary(clients_train_random_oversampling)
+
+#Checking this Clients_train_random_oversampling
+table4=table(clients_train_random_oversampling$bad_client_target)
+table4[2]/nrow(clients_train_random_oversampling)
+table4
+#14.7%
+#52 more bad_client_target_1
+
+#Buid CART tree
+cart_tree_upsample=rpart(bad_client_target~., data=clients_train_random_oversampling)
+cart_tree_upsample
+rpart.plot(cart_tree_upsample)
+
+#Evaluate CART tree
+#check accuracy with training set
+clients_train_random_oversampling$pred=predict(cart_tree_upsample,newdata=clients_train_random_oversampling,type="class")
+train_table3=table(clients_train_random_oversampling$bad_client_target,clients_train_random_oversampling$pred)
+install.packages('caret')
+library(caret)
+clients_train_random_oversampling$pred=as.factor(clients_train_random_oversampling$pred)
+confusionmatrix1 <- confusionMatrix(data=clients_train_random_oversampling$pred, reference = clients_train_random_oversampling$bad_client_target)
+confusionmatrix1
+
+train_table3
+(train_table3[1,1]+train_table3[2,2])/nrow(clients_train_random_oversampling)
+
+## Precision & recall
+precision1=(train_table3[2,2]/(train_table3[2,2]+train_table3[1,2]))
+precision1
+recall1=(train_table3[2,2]/(train_table3[2,1]+train_table3[2,2]))
+recall1
+#check accuracy with test set
+clients_test$pred=predict(cart_tree_upsample,newdata=clients_test,type="class")
+test_table3=table(clients_test$bad_client_target,clients_test$pred)
+test_table3
+(test_table3[1,1]+test_table3[2,2])/nrow(clients_test)
+confusionmatrix2 <- confusionMatrix(data=clients_test$pred, reference = clients_test$bad_client_target)
+confusionmatrix2
+
+## Precision & recall
+precision2=(test_table3[2,2]/(test_table3[2,2]+test_table3[1,2]))
+precision2
+recall2=(test_table3[2,2]/(test_table3[2,1]+test_table3[2,2]))
+recall2
+
+######COST-SENSITIVITY TRAINING 
+clients_train_random_oversampling=clients_train_random_oversampling[,-14]
+clients_test=clients_test[,-14]
+
+####MODEL V
+#build model where cost of false negative is 2 times worse than cost of false positive
+doublecost = rpart(bad_client_target~.,data=clients_train_random_oversampling,parms=list(loss=matrix(c(0,1,2,0),byrow=TRUE,nrow=2)))
+doublecost
+rpart.plot(doublecost,type=4)
+
+#check performance metrics on training set
+install.packages('caret')
+library(caret)
+clients_train_random_oversampling$pred=predict(doublecost,newdata=clients_train_random_oversampling,type="class")
+train_table4=table(clients_train_random_oversampling$bad_client_target,clients_train_random_oversampling$pred)
+train_table4
+
+accuracy=(train_table4[1,1]+train_table4[2,2])/nrow(clients_train_random_oversampling)
+recall3=(train_table4[2,2]/(train_table4[2,1]+train_table4[2,2]))
+recall3
+specificity=(train_table[1,1]/(train_table[1,1]+train_table[1,2]))
+precision3=train_table4[2,2]/(train_table4[2,2]+train_table4[1,2])
+precision3
+negpredvalue=train_table[1,1]/(train_table[1,1]+train_table[2,1])
+f1score=(2*precision*recall)/(precision+recall)
+
+clients_train_random_oversampling$pred=as.factor(clients_train_random_oversampling$pred)
+confusionmatrix3 <- confusionMatrix(data=clients_train_random_oversampling$pred, reference = clients_train_random_oversampling$bad_client_target)
+confusionmatrix3
+
+#check performance metrics on test set
+clients_test$pred=predict(doublecost,newdata=clients_test,type="class")
+test_table4=table(clients_test$bad_client_target,clients_test$pred)
+test_table4
+(test_table4[1,1]+test_table4[2,2])/nrow(clients_test)
+
+confusionmatrix4 <- confusionMatrix(data=clients_test$pred, reference = clients_test$bad_client_target)
+confusionmatrix4
+
+accuracyT=(test_table[1,1]+test_table[2,2])/nrow(churn_test)
+recall4=(test_table4[2,2]/(test_table4[2,1]+test_table4[2,2]))
+specificityT=(test_table[1,1]/(test_table[1,1]+test_table[1,2]))
+precision4=test_table4[2,2]/(test_table4[2,2]+test_table4[1,2])
+negpredvalueT=test_table[1,1]/(test_table[1,1]+test_table[2,1])
+f1scoreT=(2*precisionT*recallT)/(precisionT+recallT)
+
+############ MODEL VI
+clients_train_random_oversampling=clients_train_random_oversampling[,-14]
+clients_test=clients_test[,-14]
+
+#build model where cost of false negative is 3 times worse than cost of false positive
+triplecost = rpart(bad_client_target~.,data=clients_train_random_oversampling,parms=list(loss=matrix(c(0,1,3,0),byrow=TRUE,nrow=2)))
+triplecost
+rpart.plot(triplecost,type=4)
+
+#check performance metrics on training set
+install.packages('caret')
+library(caret)
+clients_train_random_oversampling$pred=predict(triplecost,newdata=clients_train_random_oversampling,type="class")
+train_table5=table(clients_train_random_oversampling$bad_client_target,clients_train_random_oversampling$pred)
+train_table5
+
+accuracy=(train_table5[1,1]+train_table5[2,2])/nrow(clients_train_random_oversampling)
+recall5=(train_table4[2,2]/(train_table4[2,1]+train_table4[2,2]))
+recall5
+specificity=(train_table[1,1]/(train_table[1,1]+train_table[1,2]))
+precision5=train_table4[2,2]/(train_table4[2,2]+train_table4[1,2])
+precision5
+negpredvalue=train_table[1,1]/(train_table[1,1]+train_table[2,1])
+f1score=(2*precision*recall)/(precision+recall)
+
+clients_train_random_oversampling$pred=as.factor(clients_train_random_oversampling$pred)
+confusionmatrix5 <- confusionMatrix(data=clients_train_random_oversampling$pred, reference = clients_train_random_oversampling$bad_client_target)
+confusionmatrix5
+
+#check performance metrics on test set
+clients_test$pred=predict(triplecost,newdata=clients_test,type="class")
+test_table5=table(clients_test$bad_client_target,clients_test$pred)
+test_table5
+(test_table5[1,1]+test_table5[2,2])/nrow(clients_test)
+
+confusionmatrix6 <- confusionMatrix(data=clients_test$pred, reference = clients_test$bad_client_target)
+confusionmatrix6
+
+recall6=(test_table4[2,2]/(test_table4[2,1]+test_table4[2,2]))
+specificityT=(test_table[1,1]/(test_table[1,1]+test_table[1,2]))
+precision6=test_table4[2,2]/(test_table4[2,2]+test_table4[1,2])
+negpredvalueT=test_table[1,1]/(test_table[1,1]+test_table[2,1])
+f1scoreT=(2*precisionT*recallT)/(precisionT+recallT)
+
+########MODEL VII #########
+
+#build model where cost of false negative is 4 times worse than cost of false positive
+quadruplecost = rpart(bad_client_target~.,data=clients_train_random_oversampling,parms=list(loss=matrix(c(0,1,4,0),byrow=TRUE,nrow=2)))
+quadruplecost
+rpart.plot(quadruplecost,type=4)
+
+#check performance metrics on training set
+install.packages('caret')
+library(caret)
+clients_train_random_oversampling$pred=predict(quadruplecost,newdata=clients_train_random_oversampling,type="class")
+train_table6=table(clients_train_random_oversampling$bad_client_target,clients_train_random_oversampling$pred)
+train_table6
+
+accuracy=(train_table6[1,1]+train_table6[2,2])/nrow(clients_train_random_oversampling)
+recall7=(train_table6[2,2]/(train_table6[2,1]+train_table6[2,2]))
+recall7
+specificity=(train_table[1,1]/(train_table[1,1]+train_table[1,2]))
+precision7=train_table6[2,2]/(train_table6[2,2]+train_table6[1,2])
+precision7
+negpredvalue=train_table[1,1]/(train_table[1,1]+train_table[2,1])
+f1score=(2*precision*recall)/(precision+recall)
+
+clients_train_random_oversampling$pred=as.factor(clients_train_random_oversampling$pred)
+confusionmatrix7 <- confusionMatrix(data=clients_train_random_oversampling$pred, reference = clients_train_random_oversampling$bad_client_target)
+confusionmatrix7
+
+#check performance metrics on test set
+clients_test$pred=predict(quadruplecost,newdata=clients_test,type="class")
+test_table6=table(clients_test$bad_client_target,clients_test$pred)
+test_table6
+(test_table6[1,1]+test_table6[2,2])/nrow(clients_test)
+
+confusionmatrix8 <- confusionMatrix(data=clients_test$pred, reference = clients_test$bad_client_target)
+confusionmatrix8
+
+recall8=(test_table6[2,2]/(test_table6[2,1]+test_table6[2,2]))
+specificityT=(test_table[1,1]/(test_table[1,1]+test_table[1,2]))
+precision8=test_table6[2,2]/(test_table6[2,2]+test_table6[1,2])
+negpredvalueT=test_table[1,1]/(test_table[1,1]+test_table[2,1])
+f1scoreT=(2*precisionT*recallT)/(precisionT+recallT)
